@@ -44,15 +44,19 @@ const Navigation = ({ user, onLogout }) => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '40px' }}>
           <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{
-              background: 'var(--gradient-main)',
+              width: '32px',
+              height: '32px',
               borderRadius: '8px',
-              padding: '6px 12px',
+              background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               fontWeight: 800,
-              fontSize: '1.2rem',
+              fontSize: '1rem',
               color: '#fff'
-            }}>SL</span>
+            }}>SF</span>
             <span style={{ fontWeight: 800, fontSize: '1.25rem', letterSpacing: '-0.03em', color: '#fff' }}>
-              Specific<span style={{ color: 'var(--primary)' }}>Learnerz</span>
+              SPECIFIC<span style={{ color: 'var(--primary)' }}>FOUNDATIONZ</span>
             </span>
           </Link>
 

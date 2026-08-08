@@ -55,7 +55,7 @@ const Home = ({ enrolledOnly = false }) => {
           {enrolledOnly ? (
             <>📚 My Enrolled <span className="gradient-text">Courses</span></>
           ) : (
-            <>🚀 Master the JEE with <span className="gradient-text">Specific Learnerz</span></>
+            <>🚀 Master the JEE with <span className="gradient-text">SPECIFIC FOUNDATIONZ</span></>
           )}
         </h1>
         <p style={{ maxWidth: '600px', margin: '0 auto' }}>
