@@ -7,6 +7,7 @@ import { authenticateToken } from '../middleware/auth.js';
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'JWT_SECRET_SPECIFIC_LEARNZ_LOCAL_KEY';
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || 'no-reply@specificlearnz.com';
 
 // Helper to send emails via Brevo HTTP API
 const sendEmail = async (toEmail, subject, htmlContent) => {
@@ -27,7 +28,7 @@ const sendEmail = async (toEmail, subject, htmlContent) => {
         'content-type': 'application/json'
       },
       body: JSON.stringify({
-        sender: { name: 'Specific Learnz', email: 'no-reply@specificlearnz.com' },
+        sender: { name: 'Specific Learnz', email: BREVO_SENDER_EMAIL },
         to: [{ email: toEmail }],
         subject: subject,
         htmlContent: htmlContent
