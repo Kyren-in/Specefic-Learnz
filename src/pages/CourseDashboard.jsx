@@ -12,8 +12,9 @@ const CourseDashboard = ({ user }) => {
   const { courseId } = useParams();
   const navigate = useNavigate();
   
-  // Navigation tabs
+  // Navigation tabs & mobile drawer
   const [activeTab, setActiveTab] = useState('overview'); // overview, materials, ai-search, doubts, tests, report, predictor, announcements, feedback
+  const [drawerOpen, setDrawerOpen] = useState(false);
   
   // Data states
   const [course, setCourse] = useState(null);
@@ -77,14 +78,47 @@ const CourseDashboard = ({ user }) => {
     );
   }
 
+  const currentTabObj = tabs.find(t => t.id === activeTab) || tabs[0];
+  const CurrentIcon = currentTabObj.icon;
+
   return (
     <div className="dashboard-layout-container">
-      {/* 1. Dashboard Sidebar / Top Mobile Navigation Bar */}
-      <aside className="dashboard-sidebar">
-        {/* Back Link */}
-        <Link to="/my-courses" className="dashboard-back-link">
-          <ArrowLeft size={14} /> My Dashboard
-        </Link>
+      {/* Mobile Top Navigation Toggle Trigger */}
+      <div className="mobile-course-nav-bar">
+        <button 
+          onClick={() => setDrawerOpen(true)}
+          className="mobile-course-menu-trigger"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CurrentIcon size={18} color="var(--primary)" />
+            <span>Section: <strong>{currentTabObj.label}</strong></span>
+          </div>
+          <span className="badge badge-primary" style={{ fontSize: '0.75rem' }}>Change ➔</span>
+        </button>
+      </div>
+
+      {/* Backdrop overlay for mobile left drawer */}
+      {drawerOpen && (
+        <div 
+          className="dashboard-drawer-backdrop"
+          onClick={() => setDrawerOpen(false)}
+        />
+      )}
+
+      {/* 1. Dashboard Sidebar (Left Slide Drawer on Mobile, Desktop Fixed Panel) */}
+      <aside className={`dashboard-sidebar ${drawerOpen ? 'open-drawer' : ''}`}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {/* Back Link */}
+          <Link to="/my-courses" className="dashboard-back-link">
+            <ArrowLeft size={14} /> My Dashboard
+          </Link>
+          <button 
+            className="mobile-drawer-close-btn"
+            onClick={() => setDrawerOpen(false)}
+          >
+            ✕ Close
+          </button>
+        </div>
 
         {/* Course Mini Header */}
         <div className="dashboard-course-header">
@@ -92,7 +126,7 @@ const CourseDashboard = ({ user }) => {
           <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>{course.category || 'JEE Main + Advanced'}</span>
         </div>
 
-        {/* Navigation Tab Bar (Responsive across Mobile & Desktop) */}
+        {/* Navigation List */}
         <nav className="dashboard-tabs-list">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -100,7 +134,10 @@ const CourseDashboard = ({ user }) => {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setDrawerOpen(false); // Auto-hide menu back into left side when item is selected!
+                }}
                 className={`dashboard-tab-btn ${isActive ? 'active' : ''}`}
               >
                 <Icon size={16} /> {tab.label}
