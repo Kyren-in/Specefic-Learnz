@@ -8,7 +8,7 @@
     "frontend": "vite",
     "backend": "npm --prefix server start",
     "build": "vite build",
-    "build:prod": "npm install && npm --prefix server install && vite build",
+    "build:prod": "npm install --include=dev && npm --prefix server install && vite build",
     "start:prod": "cross-env NODE_ENV=production node server/server.js",
     "lint": "oxlint",
     "preview": "vite preview"
