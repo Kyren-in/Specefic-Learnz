@@ -54,7 +54,7 @@ const Navigation = ({ user, onLogout }) => {
               }}
             />
             <span style={{ fontWeight: 800, fontSize: '1.25rem', letterSpacing: '-0.03em', color: '#fff' }}>
-              SPECIFIC<span style={{ color: 'var(--primary)' }}>LEARNERZ</span>
+              Specific<span style={{ color: 'var(--primary)' }}>Learnerz</span>
             </span>
           </Link>
 

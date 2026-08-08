@@ -28,7 +28,7 @@ const sendEmail = async (toEmail, subject, htmlContent) => {
         'content-type': 'application/json'
       },
       body: JSON.stringify({
-        sender: { name: 'SPECIFIC FOUNDATIONZ', email: BREVO_SENDER_EMAIL },
+        sender: { name: 'Specific Learnerz', email: BREVO_SENDER_EMAIL },
         to: [{ email: toEmail }],
         subject: subject,
         htmlContent: htmlContent
@@ -74,17 +74,17 @@ router.post('/register', async (req, res) => {
       [email, otp, expiresAt]
     );
 
-    const subject = 'Verify your email for SPECIFIC FOUNDATIONZ';
+    const subject = 'Verify your email for Specific Learnerz';
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e4e4e7; border-radius: 8px;">
-        <h2 style="color: #6366f1;">Welcome to SPECIFIC FOUNDATIONZ!</h2>
+        <h2 style="color: #6366f1;">Welcome to Specific Learnerz!</h2>
         <p>You're almost ready to start learning. Use the verification code below to complete your registration:</p>
         <div style="font-size: 32px; font-weight: bold; text-align: center; margin: 30px 0; letter-spacing: 4px; color: #4f46e5;">
           ${otp}
         </div>
         <p>This code will expire in 10 minutes. If you did not request this, you can ignore this email.</p>
         <hr style="border: 0; border-top: 1px solid #e4e4e7; margin: 20px 0;">
-        <p style="font-size: 12px; color: #71717a;">SPECIFIC FOUNDATIONZ - JEE Preparation Platform</p>
+        <p style="font-size: 12px; color: #71717a;">Specific Learnerz - JEE Preparation Platform</p>
       </div>
     `;
 
@@ -211,7 +211,7 @@ router.post('/forgot-password', async (req, res) => {
       [email, resetToken, expiresAt]
     );
 
-    const subject = 'Password Reset Code - SPECIFIC FOUNDATIONZ';
+    const subject = 'Password Reset Code - Specific Learnerz';
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e4e4e7; border-radius: 8px;">
         <h2 style="color: #6366f1;">Reset your password</h2>
@@ -221,7 +221,7 @@ router.post('/forgot-password', async (req, res) => {
         </div>
         <p>This code will expire in 15 minutes. If you did not request this, you can ignore this email.</p>
         <hr style="border: 0; border-top: 1px solid #e4e4e7; margin: 20px 0;">
-        <p style="font-size: 12px; color: #71717a;">SPECIFIC FOUNDATIONZ - JEE Preparation Platform</p>
+        <p style="font-size: 12px; color: #71717a;">Specific Learnerz - JEE Preparation Platform</p>
       </div>
     `;
 

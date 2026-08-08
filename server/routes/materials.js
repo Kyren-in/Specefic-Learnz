@@ -78,7 +78,7 @@ router.get('/:id/view', authenticateToken, async (req, res) => {
     const pages = pdfDoc.getPages();
 
     const course = await getRow('SELECT name FROM courses WHERE id = $1', [material.course_id]);
-    const courseName = course ? course.name : 'JEE Course — SPECIFIC FOUNDATIONZ';
+    const courseName = course ? course.name : 'JEE Course — Specific Learnerz';
     const watermarkText = `Licensed to: ${req.user.name} | Email: ${req.user.email} | ID: USR${req.user.id} | Course: ${courseName}`;
 
     pages.forEach((page) => {
