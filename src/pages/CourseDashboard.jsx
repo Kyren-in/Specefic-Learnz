@@ -78,30 +78,22 @@ const CourseDashboard = ({ user }) => {
   }
 
   return (
-    <div style={{ display: 'flex', flex: 1, minHeight: 'calc(100vh - 70px)' }}>
-      {/* 1. Dashboard Sidebar */}
-      <aside style={{
-        width: '260px',
-        background: 'var(--bg-secondary)',
-        borderRight: '1px solid var(--border-color)',
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '24px 16px',
-        gap: '20px'
-      }}>
+    <div className="dashboard-layout-container">
+      {/* 1. Dashboard Sidebar / Top Tabs on Mobile */}
+      <aside className="dashboard-sidebar">
         {/* Back Link */}
         <Link to="/my-courses" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
           <ArrowLeft size={14} /> My Dashboard
         </Link>
 
         {/* Course Mini Header */}
-        <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '16px' }}>
+        <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
           <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{course.name}</h3>
-          <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>JEE Advanced Hub</span>
+          <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>{course.category || 'JEE Main + Advanced'}</span>
         </div>
 
         {/* Navigation List */}
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
+        <nav className="dashboard-tabs-list">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -109,21 +101,7 @@ const CourseDashboard = ({ user }) => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '12px 16px',
-                  borderRadius: '10px',
-                  border: 'none',
-                  background: isActive ? 'var(--gradient-main)' : 'transparent',
-                  color: isActive ? '#fff' : 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  fontSize: '0.9rem',
-                  textAlign: 'left',
-                  transition: 'var(--transition-fast)'
-                }}
+                className={`dashboard-tab-btn ${isActive ? 'active' : ''}`}
               >
                 <Icon size={16} /> {tab.label}
               </button>
@@ -133,7 +111,7 @@ const CourseDashboard = ({ user }) => {
       </aside>
 
       {/* 2. Main Workspace */}
-      <main style={{ flex: 1, padding: '40px', background: 'var(--bg-primary)', overflowY: 'auto' }}>
+      <main className="dashboard-main-content">
         {activeTab === 'overview' && <OverviewTab course={course} setActiveTab={setActiveTab} />}
         {activeTab === 'materials' && <MaterialsTab courseId={courseId} user={user} />}
         {activeTab === 'ai-search' && <AiSearchTab courseId={courseId} courseName={course.name} />}
