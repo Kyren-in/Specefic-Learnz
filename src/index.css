@@ -319,3 +319,31 @@ a:hover {
   border-color: var(--primary);
   color: #fff;
 }
+
+/* Mobile & Tablet Responsive Scaling Rules */
+@media (max-width: 768px) {
+  html, body {
+    font-size: 14px;
+  }
+  
+  .glass-panel {
+    padding: 16px !important;
+    border-radius: 12px !important;
+  }
+
+  /* Grid collapse for mobile screens */
+  div[style*="gridTemplateColumns"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Dashboard sidebar stack for mobile */
+  aside[style*="width: '260px'"] {
+    width: 100% !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border-color) !important;
+  }
+
+  div[style*="flexDirection: 'row'"] {
+    flex-direction: column !important;
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "short_name": "Specific Learnerz",
+  "name": "Specific Learnerz — JEE Preparation Platform",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#09090b",
+  "theme_color": "#6366f1",
+  "display": "standalone",
+  "orientation": "portrait"
+}
