@@ -79,38 +79,20 @@ const CourseDashboard = ({ user }) => {
 
   return (
     <div className="dashboard-layout-container">
-      {/* 1. Dashboard Sidebar / Top Mobile Dropdown */}
+      {/* 1. Dashboard Sidebar / Top Mobile Navigation Bar */}
       <aside className="dashboard-sidebar">
         {/* Back Link */}
-        <Link to="/my-courses" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+        <Link to="/my-courses" className="dashboard-back-link">
           <ArrowLeft size={14} /> My Dashboard
         </Link>
 
         {/* Course Mini Header */}
-        <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+        <div className="dashboard-course-header">
           <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{course.name}</h3>
           <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>{course.category || 'JEE Main + Advanced'}</span>
         </div>
 
-        {/* Mobile Dropdown Picker (Visible on Mobile) */}
-        <div className="mobile-tab-dropdown-wrapper">
-          <label style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '4px', display: 'block' }}>
-            Select Section:
-          </label>
-          <select 
-            value={activeTab} 
-            onChange={(e) => setActiveTab(e.target.value)}
-            className="mobile-tab-select"
-          >
-            {tabs.map((tab) => (
-              <option key={tab.id} value={tab.id}>
-                📍 {tab.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Desktop Sidebar Navigation List */}
+        {/* Navigation Tab Bar (Responsive across Mobile & Desktop) */}
         <nav className="dashboard-tabs-list">
           {tabs.map((tab) => {
             const Icon = tab.icon;
