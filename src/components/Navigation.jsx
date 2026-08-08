@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, ShieldAlert, Bell, BookOpen, Layers } from 'lucide-react';
+import { LogOut, ShieldAlert, Bell, BookOpen, Layers, User as UserIcon } from 'lucide-react';
 import { api } from '../utils/api.js';
 
 const Navigation = ({ user, onLogout }) => {
@@ -11,7 +11,6 @@ const Navigation = ({ user, onLogout }) => {
 
   useEffect(() => {
     if (user) {
-      // Fetch universal announcements
       api.get('/api/admin/announcements')
         .then(data => {
           setAnnouncements(data.filter(a => a.type === 'universal'));
@@ -42,21 +41,20 @@ const Navigation = ({ user, onLogout }) => {
         padding: '0 32px'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '40px' }}>
-          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
-              background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 800,
-              fontSize: '1rem',
-              color: '#fff'
-            }}>SF</span>
+          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <img 
+              src="/logo.png" 
+              alt="SPECIFIC LEARNERZ Logo" 
+              style={{
+                height: '42px',
+                width: 'auto',
+                objectFit: 'contain',
+                borderRadius: '6px',
+                filter: 'drop-shadow(0 2px 8px rgba(99, 102, 241, 0.4))'
+              }}
+            />
             <span style={{ fontWeight: 800, fontSize: '1.25rem', letterSpacing: '-0.03em', color: '#fff' }}>
-              SPECIFIC<span style={{ color: 'var(--primary)' }}>FOUNDATIONZ</span>
+              SPECIFIC<span style={{ color: 'var(--primary)' }}>LEARNERZ</span>
             </span>
           </Link>
 
@@ -131,12 +129,44 @@ const Navigation = ({ user, onLogout }) => {
                 )}
               </button>
 
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{user.name}</span>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'capitalize' }}>
-                  {user.role}
-                </span>
-              </div>
+              {/* Profile Link with Avatar */}
+              <Link 
+                to="/profile" 
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '4px 10px',
+                  borderRadius: '20px',
+                  background: location.pathname === '/profile' ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+                  border: location.pathname === '/profile' ? '1px solid var(--primary)' : '1px solid transparent',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <div style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  overflow: 'hidden',
+                  background: 'linear-gradient(135deg, var(--primary), var(--accent))',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '1px solid rgba(255,255,255,0.2)'
+                }}>
+                  {user.avatar_url ? (
+                    <img src={user.avatar_url} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <UserIcon size={18} color="#fff" />
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontWeight: 600, fontSize: '0.85rem', color: '#fff' }}>{user.name}</span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'capitalize' }}>
+                    {user.role}
+                  </span>
+                </div>
+              </Link>
 
               {user.role === 'admin' && (
                 <Link to="/admin" className="btn btn-secondary" style={{ padding: '8px 16px', fontSize: '0.85rem' }}>

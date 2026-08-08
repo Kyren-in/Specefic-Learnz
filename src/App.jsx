@@ -6,6 +6,7 @@ import Home from './pages/Home.jsx';
 import CourseDetails from './pages/CourseDetails.jsx';
 import CourseDashboard from './pages/CourseDashboard.jsx';
 import Resources from './pages/Resources.jsx';
+import Profile from './pages/Profile.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import { api } from './utils/api.js';
 
@@ -94,6 +95,7 @@ function App() {
             <Route path="/" element={<ProtectedRoute><Home enrolledOnly={false} /></ProtectedRoute>} />
             <Route path="/my-courses" element={<ProtectedRoute><Home enrolledOnly={true} /></ProtectedRoute>} />
             <Route path="/resources" element={<ProtectedRoute><Resources user={user} /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/course/:courseId/details" element={<ProtectedRoute><CourseDetails /></ProtectedRoute>} />
             <Route path="/course/:courseId/*" element={<ProtectedRoute><CourseDashboard user={user} /></ProtectedRoute>} />
 

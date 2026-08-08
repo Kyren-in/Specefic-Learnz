@@ -66,3 +66,9 @@ export const api = {
     return res.json();
   }
 };
+
+// Profile API helpers
+export const getProfile = () => api.get('/api/auth/me');
+export const updateProfile = (data) => api.put('/api/auth/profile', data);
+export const uploadAvatar = (formData) => api.post('/api/auth/avatar', formData, true);
+

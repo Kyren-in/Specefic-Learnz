@@ -278,7 +278,7 @@ router.post('/reset-password', async (req, res) => {
 router.get('/me', authenticateToken, async (req, res) => {
   try {
     const user = await getRow(
-      'SELECT id, name, email, mobile, role, status FROM users WHERE id = $1',
+      'SELECT id, name, email, mobile, role, status, avatar_url FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!user) {
@@ -291,6 +291,183 @@ router.get('/me', authenticateToken, async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: 'Session check failed' });
   }
+});
+
+// 7. Update Profile Details (Name, Mobile, Password)
+router.put('/profile', authenticateToken, async (req, res) => {
+  const { name, mobile, currentPassword, newPassword } = req.body;
+
+  try {
+    const user = await getRow('SELECT * FROM users WHERE id = $1', [req.user.id]);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // If mobile is changing, check uniqueness
+    if (mobile && mobile !== user.mobile) {
+      const existingMobile = await getRow('SELECT id FROM users WHERE mobile = $1 AND id != $2', [mobile, req.user.id]);
+      if (existingMobile) {
+        return res.status(400).json({ message: 'Mobile number is already in use by another account' });
+      }
+    }
+
+    let passwordHash = user.password_hash;
+
+    // Password change request
+    if (newPassword) {
+      if (!currentPassword) {
+        return res.status(400).json({ message: 'Current password is required to set a new password' });
+      }
+      const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
+      if (!isMatch) {
+        return res.status(400).json({ message: 'Current password is incorrect' });
+      }
+      passwordHash = await bcrypt.hash(newPassword, 10);
+    }
+
+    const updatedName = name || user.name;
+    const updatedMobile = mobile || user.mobile;
+
+    await runQuery(
+      'UPDATE users SET name = $1, mobile = $2, password_hash = $3 WHERE id = $4',
+      [updatedName, updatedMobile, passwordHash, req.user.id]
+    );
+
+    const updatedUserPayload = {
+      id: user.id,
+      email: user.email,
+      name: updatedName,
+      mobile: updatedMobile,
+      role: user.role,
+      avatar_url: user.avatar_url
+    };
+
+    res.json({
+      message: 'Profile updated successfully',
+      user: updatedUserPayload
+    });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ message: 'Failed to update profile' });
+  }
+});
+
+// 8. Secure Avatar Image Upload with Magic Byte & Code Injection Scanner
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadDir = path.resolve(__dirname, '../uploads/avatars');
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => { cb(null, uploadDir); },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const uniqueName = `avatar-${req.user.id}-${Date.now()}${ext}`;
+    cb(null, uniqueName);
+  }
+});
+
+const avatarUpload = multer({
+  storage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB max
+  fileFilter: (req, file, cb) => {
+    const allowedMime = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    const allowedExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+    const ext = path.extname(file.originalname).toLowerCase();
+
+    if (allowedMime.includes(file.mimetype) && allowedExt.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid image type. Only JPG, PNG, WEBP, and GIF are allowed.'));
+    }
+  }
+}).single('avatar');
+
+// Helper to inspect magic bytes and scan for embedded malicious script payloads
+const validateImageSecurity = (filePath) => {
+  const buffer = fs.readFileSync(filePath);
+  if (buffer.length < 12) return { safe: false, reason: 'File size too small to be a valid image' };
+
+  // 1. Magic Bytes Validation
+  const isPng = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
+  const isJpg = buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
+  const isGif = buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38;
+  const isWebp = buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+                 buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50;
+
+  if (!isPng && !isJpg && !isGif && !isWebp) {
+    return { safe: false, reason: 'File headers do not match genuine image magic bytes' };
+  }
+
+  // 2. Anti-Malicious Code Injection Scanner (Detect polyglot shell / PHP / HTML / JS injection)
+  const fileContentLower = buffer.toString('binary').toLowerCase();
+  const dangerousPatterns = [
+    '<?php', '<?=', '<script', '<%', '#!/bin/', 'system(', 'shell_exec(', 'passthru(',
+    'exec(', 'eval(', 'base64_decode', '__import__', '<iframe', '<object', '<embed',
+    'javascript:', 'onerror=', 'onload='
+  ];
+
+  for (const pattern of dangerousPatterns) {
+    if (fileContentLower.includes(pattern)) {
+      return { safe: false, reason: 'Malicious code or executable script signature detected in image buffer' };
+    }
+  }
+
+  return { safe: true };
+};
+
+router.post('/avatar', authenticateToken, (req, res) => {
+  avatarUpload(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ message: err.message || 'Avatar upload error' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'No avatar image provided' });
+    }
+
+    const uploadedPath = req.file.path;
+
+    // Perform security inspection
+    const security = validateImageSecurity(uploadedPath);
+    if (!security.safe) {
+      // Immediately delete malicious/invalid file
+      fs.unlinkSync(uploadedPath);
+      console.warn(`[SECURITY ALERT] Blocked malicious avatar upload for user #${req.user.id}: ${security.reason}`);
+      return res.status(400).json({ message: `Security Check Failed: ${security.reason}` });
+    }
+
+    try {
+      const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+
+      // Delete old custom avatar file if present
+      const oldUser = await getRow('SELECT avatar_url FROM users WHERE id = $1', [req.user.id]);
+      if (oldUser && oldUser.avatar_url && oldUser.avatar_url.startsWith('/uploads/avatars/')) {
+        const oldPath = path.resolve(__dirname, '..', oldUser.avatar_url.slice(1));
+        if (fs.existsSync(oldPath)) {
+          try { fs.unlinkSync(oldPath); } catch (e) {}
+        }
+      }
+
+      await runQuery('UPDATE users SET avatar_url = $1 WHERE id = $2', [avatarUrl, req.user.id]);
+
+      res.json({
+        message: 'Profile picture updated successfully',
+        avatarUrl
+      });
+    } catch (dbErr) {
+      console.error('Avatar DB update error:', dbErr);
+      res.status(500).json({ message: 'Failed to update user avatar record' });
+    }
+  });
 });
 
 export default router;

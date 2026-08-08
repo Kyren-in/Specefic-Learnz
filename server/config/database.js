@@ -57,9 +57,11 @@ export const initDb = async () => {
         role TEXT NOT NULL DEFAULT 'student',
         status TEXT NOT NULL DEFAULT 'active',
         ban_reason TEXT,
+        avatar_url TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT`);
 
     // 2. OTP Verifications
     await client.query(`
