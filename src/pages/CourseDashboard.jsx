@@ -138,7 +138,7 @@ const CourseDashboard = ({ user }) => {
       {/* 2. Main Workspace */}
       <main style={{ flex: 1, padding: '40px', background: 'var(--bg-primary)', overflowY: 'auto' }}>
         {activeTab === 'overview' && <OverviewTab course={course} setActiveTab={setActiveTab} />}
-        {activeTab === 'materials' && <MaterialsTab courseId={courseId} />}
+        {activeTab === 'materials' && <MaterialsTab courseId={courseId} user={user} />}
         {activeTab === 'ai-search' && <AiSearchTab courseId={courseId} courseName={course.name} />}
         {activeTab === 'doubts' && <DoubtBoxTab courseId={courseId} />}
         {activeTab === 'tests' && <TestSeriesTab courseId={courseId} />}
@@ -223,10 +223,10 @@ const OverviewTab = ({ course, setActiveTab }) => {
 /* =========================================================================
    TAB: MATERIALS
    ========================================================================= */
-const MaterialsTab = ({ courseId }) => {
+const MaterialsTab = ({ courseId, user }) => {
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedPdf, setSelectedPdf] = useState(null);
+  const [selectedMaterial, setSelectedMaterial] = useState(null);
 
   useEffect(() => {
     api.get(`/api/materials/course/${courseId}`)
@@ -235,19 +235,19 @@ const MaterialsTab = ({ courseId }) => {
       .finally(() => setLoading(false));
   }, [courseId]);
 
-  if (selectedPdf) {
+  if (selectedMaterial) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', animation: 'fadeIn 0.3s ease-out' }}>
         <button 
-          onClick={() => setSelectedPdf(null)} 
+          onClick={() => setSelectedMaterial(null)} 
           className="btn btn-secondary" 
           style={{ alignSelf: 'flex-start', padding: '8px 16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
         >
           <ArrowLeft size={14} /> Back to materials list
         </button>
         <ProtectedViewer 
-          fileUrl={`/api/materials/${selectedPdf.id}/view`} 
-          title={selectedPdf.title} 
+          material={selectedMaterial}
+          user={user}
         />
       </div>
     );
@@ -256,8 +256,8 @@ const MaterialsTab = ({ courseId }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeIn 0.3s ease-out' }}>
       <div>
-        <h2 style={{ fontSize: '1.75rem', marginBottom: '8px' }}>📚 Study Material</h2>
-        <p>Access notes, exam strategies, guidelines, and watermarked lesson PDFs.</p>
+        <h2 style={{ fontSize: '1.75rem', marginBottom: '8px' }}>📚 Study Material & Lessons</h2>
+        <p>Access notes, video lectures, exam guidelines, and watermarked PDFs right inside the platform.</p>
       </div>
 
       {loading ? (
@@ -290,39 +290,38 @@ const MaterialsTab = ({ courseId }) => {
                   <div style={{
                     padding: '10px',
                     borderRadius: '8px',
-                    background: mat.type === 'pdf' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(99, 102, 241, 0.1)',
-                    color: mat.type === 'pdf' ? '#f87171' : 'var(--primary)',
+                    background: mat.type === 'pdf' 
+                      ? 'rgba(239, 68, 68, 0.1)' 
+                      : mat.type === 'video'
+                        ? 'rgba(99, 102, 241, 0.1)'
+                        : 'rgba(52, 211, 153, 0.1)',
+                    color: mat.type === 'pdf' 
+                      ? '#f87171' 
+                      : mat.type === 'video'
+                        ? 'var(--primary)'
+                        : '#34d399',
                     display: 'flex'
                   }}>
-                    {mat.type === 'pdf' ? <FileSpreadsheet size={20} /> : <Play size={20} />}
+                    {mat.type === 'pdf' && <FileSpreadsheet size={20} />}
+                    {mat.type === 'video' && <Play size={20} />}
+                    {mat.type !== 'pdf' && mat.type !== 'video' && <BookOpen size={20} />}
                   </div>
                   <div>
                     <h4 style={{ fontSize: '1rem', fontWeight: 700 }}>{mat.title}</h4>
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>
-                      {mat.type}
+                      {mat.type} Lesson
                     </span>
                   </div>
                 </div>
 
-                {mat.type === 'pdf' ? (
-                  <button 
-                    onClick={() => setSelectedPdf(mat)} 
-                    className="btn btn-primary"
-                    style={{ padding: '8px 16px', fontSize: '0.85rem' }}
-                  >
-                    View Secure PDF
-                  </button>
-                ) : (
-                  <a 
-                    href={`/api/materials/${mat.id}/view?token=${localStorage.getItem('token')}`} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="btn btn-secondary"
-                    style={{ padding: '8px 16px', fontSize: '0.85rem' }}
-                  >
-                    Launch Material Link
-                  </a>
-                )}
+                <button 
+                  onClick={() => setSelectedMaterial(mat)} 
+                  className="btn btn-primary"
+                  style={{ padding: '8px 18px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  {mat.type === 'video' ? <Play size={14} /> : <Lock size={14} />}
+                  Open Content
+                </button>
               </div>
             );
           })}
