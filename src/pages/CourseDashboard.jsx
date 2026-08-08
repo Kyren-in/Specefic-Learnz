@@ -40,14 +40,19 @@ const CourseDashboard = ({ user }) => {
     // Check enrollment status first
     api.get(`/api/courses/${courseId}/enrolled`)
       .then((enrollRes) => {
-        if (!enrollRes.enrolled && user?.role !== 'admin') {
+        if (!enrollRes || (!enrollRes.enrolled && user?.role !== 'admin')) {
           navigate(`/course/${courseId}/details`, { replace: true });
           return;
         }
         return api.get(`/api/courses/${courseId}`).then(data => setCourse(data));
       })
       .catch(err => {
-        setError(err.message || 'Course access restricted');
+        console.error('Enrollment check error:', err);
+        if (user?.role !== 'admin') {
+          navigate(`/course/${courseId}/details`, { replace: true });
+        } else {
+          setError(err.message || 'Course access restricted');
+        }
       })
       .finally(() => {
         setLoading(false);
@@ -309,7 +314,7 @@ const MaterialsTab = ({ courseId }) => {
                   </button>
                 ) : (
                   <a 
-                    href={`/api/materials/${mat.id}/view`} 
+                    href={`/api/materials/${mat.id}/view?token=${localStorage.getItem('token')}`} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="btn btn-secondary"

@@ -39,9 +39,14 @@ export const checkCourseEnrollment = async (userId, courseId, role) => {
   if (role === 'admin') return true;
 
   try {
+    const uId = parseInt(userId);
+    const cId = parseInt(courseId);
+
+    if (isNaN(uId) || isNaN(cId)) return false;
+
     const enrollment = await getRow(
       'SELECT id FROM enrollments WHERE user_id = $1 AND course_id = $2',
-      [userId, courseId]
+      [uId, cId]
     );
     return !!enrollment;
   } catch (error) {
