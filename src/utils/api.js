@@ -71,4 +71,6 @@ export const api = {
 export const getProfile = () => api.get('/api/auth/me');
 export const updateProfile = (data) => api.put('/api/auth/profile', data);
 export const uploadAvatar = (formData) => api.post('/api/auth/avatar', formData, true);
+export const deleteCourse = (courseId) => api.delete(`/api/courses/${courseId}`);
+
 

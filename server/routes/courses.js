@@ -137,7 +137,35 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
     res.status(500).json({ message: 'Failed to update course' });
   }
 });
+// 8. Admin: Delete Course (and associated child records)
+router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const { id } = req.params;
 
+  try {
+    const course = await getRow('SELECT id FROM courses WHERE id = $1', [id]);
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    // Cascade deletion of dependent records
+    await runQuery('DELETE FROM questions WHERE test_id IN (SELECT id FROM tests WHERE course_id = $1)', [id]);
+    await runQuery('DELETE FROM test_attempts WHERE test_id IN (SELECT id FROM tests WHERE course_id = $1)', [id]);
+    await runQuery('DELETE FROM tests WHERE course_id = $1', [id]);
+    await runQuery('DELETE FROM document_chunks WHERE course_id = $1', [id]);
+    await runQuery('DELETE FROM materials WHERE course_id = $1', [id]);
+    await runQuery('DELETE FROM doubt_replies WHERE doubt_id IN (SELECT id FROM doubts WHERE course_id = $1)', [id]);
+    await runQuery('DELETE FROM doubts WHERE course_id = $1', [id]);
+    await runQuery('DELETE FROM enrollments WHERE course_id = $1', [id]);
+    await runQuery('DELETE FROM announcements WHERE course_id = $1', [id]);
+    await runQuery('DELETE FROM feedbacks WHERE course_id = $1', [id]);
+    await runQuery('DELETE FROM courses WHERE id = $1', [id]);
+
+    res.json({ message: 'Course and all associated materials/tests deleted successfully' });
+  } catch (error) {
+    console.error('Delete course error:', error);
+    res.status(500).json({ message: 'Failed to delete course' });
+  }
+});
 // 8. Purchase Course - Create Order (Razorpay or Mock)
 router.post('/purchase', authenticateToken, async (req, res) => {
   const { courseId } = req.body;

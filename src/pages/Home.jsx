@@ -28,7 +28,7 @@ const Home = ({ enrolledOnly = false }) => {
       });
   }, [enrolledOnly]);
 
-  const categories = ['All', ...Array.from(new Set(courses.map(c => c.category || 'General')))];
+  const categories = ['All', 'JEE Main Only', 'JEE Advanced Only', 'JEE Main + JEE Advanced'];
 
   const filteredCourses = selectedCategory === 'All' 
     ? courses 

@@ -3,7 +3,7 @@ import {
   BarChart, Users, BookOpen, Layers, ShieldAlert, FileText, CheckCircle, 
   Trash2, Plus, Ban, Check, HelpCircle, AlertCircle, Sparkles, Send, DollarSign
 } from 'lucide-react';
-import { api } from '../utils/api.js';
+import { api, deleteCourse } from '../utils/api.js';
 
 const AdminDashboard = () => {
   const [activeSubTab, setActiveSubTab] = useState('stats'); // stats, courses, materials, users, announcements, tests
@@ -27,7 +27,7 @@ const AdminDashboard = () => {
   const [cPrice, setCPrice] = useState('');
   const [cDiscount, setCDiscount] = useState('');
   const [cThumb, setCThumb] = useState('');
-  const [cCategory, setCCategory] = useState('Mathematics');
+  const [cCategory, setCCategory] = useState('JEE Main Only');
   const [cDuration, setCDuration] = useState('3 Months');
   const [cStatus, setCStatus] = useState('draft');
   const [editingCourseId, setEditingCourseId] = useState(null);
@@ -182,9 +182,30 @@ const AdminDashboard = () => {
     setCPrice(course.price.toString());
     setCDiscount(course.discount_price ? course.discount_price.toString() : '');
     setCThumb(course.thumbnail || '');
-    setCCategory(course.category || 'Mathematics');
+    setCCategory(course.category || 'JEE Main Only');
     setCDuration(course.duration || '3 Months');
     setCStatus(course.status);
+  };
+
+  const handleDeleteCourseClick = async (courseId, courseName) => {
+    if (window.confirm(`Are you sure you want to delete "${courseName}"? This will permanently remove the course and all associated study materials, tests, and student enrollments.`)) {
+      try {
+        await deleteCourse(courseId);
+        alert('Course deleted successfully!');
+        if (editingCourseId === courseId) {
+          setEditingCourseId(null);
+          setCName('');
+          setCDesc('');
+          setCPrice('');
+          setCDiscount('');
+          setCThumb('');
+        }
+        fetchCourses();
+        fetchStats();
+      } catch (err) {
+        alert(err.message || 'Failed to delete course');
+      }
+    }
   };
 
   const handleUploadMaterial = async (e) => {
@@ -468,9 +489,9 @@ const AdminDashboard = () => {
               <div className="form-group">
                 <label className="form-label">Category</label>
                 <select className="form-input" value={cCategory} onChange={e => setCCategory(e.target.value)} style={{ background: 'var(--bg-primary)' }}>
-                  <option value="Mathematics">Mathematics</option>
-                  <option value="Physics">Physics</option>
-                  <option value="Chemistry">Chemistry</option>
+                  <option value="JEE Main Only">JEE Main Only</option>
+                  <option value="JEE Advanced Only">JEE Advanced Only</option>
+                  <option value="JEE Main + JEE Advanced">JEE Main + JEE Advanced</option>
                 </select>
               </div>
               <div className="form-group">
@@ -503,14 +524,34 @@ const AdminDashboard = () => {
                 <div>
                   <h4 style={{ color: '#fff', fontSize: '1rem' }}>{course.name}</h4>
                   <div style={{ display: 'flex', gap: '12px', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                    <span>Category: <strong style={{ color: '#a5b4fc' }}>{course.category || 'JEE Main Only'}</strong></span>
                     <span>Price: ₹{course.discount_price || course.price}</span>
                     <span>Status: <strong style={{ color: course.status === 'published' ? '#34d399' : 'var(--text-tertiary)' }}>{course.status}</strong></span>
                   </div>
                 </div>
 
-                <button onClick={() => handleEditCourseClick(course)} className="btn btn-secondary" style={{ padding: '6px 14px', fontSize: '0.8rem' }}>
-                  Edit Details
-                </button>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <button onClick={() => handleEditCourseClick(course)} className="btn btn-secondary" style={{ padding: '6px 14px', fontSize: '0.8rem' }}>
+                    Edit
+                  </button>
+                  <button 
+                    onClick={() => handleDeleteCourseClick(course.id, course.name)} 
+                    className="btn" 
+                    style={{ 
+                      padding: '6px 14px', 
+                      fontSize: '0.8rem',
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      color: '#f87171',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                    title="Delete Course"
+                  >
+                    <Trash2 size={14} /> Delete
+                  </button>
+                </div>
               </div>
             ))}
           </div>
