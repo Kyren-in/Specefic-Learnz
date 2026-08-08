@@ -37,10 +37,11 @@ const CourseDashboard = ({ user }) => {
     setLoading(true);
     setError('');
 
-    // Check enrollment status first
+    // Check enrollment status first in PostgreSQL database
     api.get(`/api/courses/${courseId}/enrolled`)
       .then((enrollRes) => {
-        if (!enrollRes || (!enrollRes.enrolled && user?.role !== 'admin')) {
+        if (!enrollRes || !enrollRes.enrolled) {
+          // User has not purchased this course -> redirect to course purchase details page
           navigate(`/course/${courseId}/details`, { replace: true });
           return;
         }
@@ -48,16 +49,12 @@ const CourseDashboard = ({ user }) => {
       })
       .catch(err => {
         console.error('Enrollment check error:', err);
-        if (user?.role !== 'admin') {
-          navigate(`/course/${courseId}/details`, { replace: true });
-        } else {
-          setError(err.message || 'Course access restricted');
-        }
+        navigate(`/course/${courseId}/details`, { replace: true });
       })
       .finally(() => {
         setLoading(false);
       });
-  }, [courseId, user]);
+  }, [courseId, user, navigate]);
 
   if (loading) {
     return (

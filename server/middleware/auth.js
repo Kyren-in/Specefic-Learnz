@@ -35,8 +35,9 @@ export const requireAdmin = (req, res, next) => {
   next();
 };
 
-export const checkCourseEnrollment = async (userId, courseId, role) => {
-  if (role === 'admin') return true;
+export const checkCourseEnrollment = async (userId, courseId, role, isManagementAction = false) => {
+  // Allow admins full access for administrative management actions (e.g. uploading materials, editing courses)
+  if (role === 'admin' && isManagementAction) return true;
 
   try {
     const uId = parseInt(userId);
