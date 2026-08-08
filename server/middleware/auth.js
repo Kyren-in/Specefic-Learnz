@@ -32,10 +32,10 @@ export const requireAdmin = (req, res, next) => {
 
 export const checkCourseEnrollment = async (userId, courseId, role) => {
   if (role === 'admin') return true;
-  
+
   try {
     const enrollment = await getRow(
-      'SELECT id FROM enrollments WHERE user_id = ? AND course_id = ?',
+      'SELECT id FROM enrollments WHERE user_id = $1 AND course_id = $2',
       [userId, courseId]
     );
     return !!enrollment;
@@ -49,7 +49,7 @@ export const requireEnrollment = async (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ message: 'Unauthenticated' });
   }
-  
+
   const courseId = req.params.courseId || req.body.courseId || req.query.courseId;
   if (!courseId) {
     return res.status(400).json({ message: 'Course ID is required for access check' });

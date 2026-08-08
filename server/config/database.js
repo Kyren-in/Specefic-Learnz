@@ -1,85 +1,80 @@
-import sqlite3 from 'sqlite3';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import pg from 'pg';
 import bcrypt from 'bcryptjs';
+import dotenv from 'dotenv';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+dotenv.config();
 
-// Database path — configurable via DB_PATH env var for persistent disk hosting
-// e.g. on Render with persistent disk: DB_PATH=/var/data/database.sqlite
-const dbPath = process.env.DB_PATH || path.resolve(__dirname, '../database.sqlite');
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Error opening database', err.message);
-  } else {
-    console.log('Connected to SQLite database at:', dbPath);
-  }
+const { Pool } = pg;
+
+// PostgreSQL connection pool (Supabase or any Postgres)
+// Set DATABASE_URL in server/.env — Supabase provides this under Settings → Database → URI
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgresql://localhost:5432/specificlearnz',
+  ssl: process.env.DATABASE_URL
+    ? { rejectUnauthorized: false }  // Required for Supabase/hosted Postgres
+    : false                          // No SSL for local Postgres
 });
 
-// Helper to run query as promise
-export const runQuery = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) reject(err);
-      else resolve(this);
-    });
-  });
+pool.on('error', (err) => {
+  console.error('PostgreSQL pool error:', err);
+});
+
+// ── Query Helpers ──────────────────────────────────────────────────
+// NOTE: PostgreSQL uses $1, $2, $3... placeholders (not ?)
+
+// Run a query (INSERT / UPDATE / DELETE / CREATE)
+export const runQuery = async (sql, params = []) => {
+  const res = await pool.query(sql, params);
+  return res;
 };
 
-// Helper to get single row
-export const getRow = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
-    });
-  });
+// Get a single row — returns the row object or null
+export const getRow = async (sql, params = []) => {
+  const res = await pool.query(sql, params);
+  return res.rows[0] || null;
 };
 
-// Helper to get all rows
-export const getAllRows = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
+// Get all matching rows — returns array (may be empty)
+export const getAllRows = async (sql, params = []) => {
+  const res = await pool.query(sql, params);
+  return res.rows;
 };
 
-export const initDb = () => {
-  return new Promise((resolve, reject) => {
-    db.serialize(async () => {
-      try {
+// ── Schema Initialization ──────────────────────────────────────────
+export const initDb = async () => {
+  const client = await pool.connect();
+  try {
+    console.log('Initializing PostgreSQL schemas...');
+
     // 1. Users
-    await runQuery(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
         email TEXT UNIQUE NOT NULL,
         mobile TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
-        role TEXT NOT NULL DEFAULT 'student', -- student, admin
-        status TEXT NOT NULL DEFAULT 'active', -- active, banned
+        role TEXT NOT NULL DEFAULT 'student',
+        status TEXT NOT NULL DEFAULT 'active',
         ban_reason TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 
     // 2. OTP Verifications
-    await runQuery(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS otp_verifications (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         email TEXT NOT NULL,
         otp TEXT NOT NULL,
-        expires_at DATETIME NOT NULL
+        expires_at TIMESTAMPTZ NOT NULL
       )
     `);
 
     // 3. Courses
-    await runQuery(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS courses (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT NOT NULL,
         price REAL NOT NULL,
@@ -87,179 +82,168 @@ export const initDb = () => {
         thumbnail TEXT,
         category TEXT,
         duration TEXT,
-        status TEXT NOT NULL DEFAULT 'draft' -- draft, published, archived
+        status TEXT NOT NULL DEFAULT 'draft'
       )
     `);
 
     // 4. Enrollments
-    await runQuery(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS enrollments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        course_id INTEGER NOT NULL,
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        course_id INTEGER NOT NULL REFERENCES courses(id),
         payment_id TEXT NOT NULL,
-        purchased_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id),
-        FOREIGN KEY(course_id) REFERENCES courses(id)
+        purchased_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 
     // 5. Materials
-    await runQuery(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS materials (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        course_id INTEGER NOT NULL,
+        id SERIAL PRIMARY KEY,
+        course_id INTEGER NOT NULL REFERENCES courses(id),
         title TEXT NOT NULL,
         file_path TEXT NOT NULL,
-        type TEXT NOT NULL, -- pdf, video, note, link
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(course_id) REFERENCES courses(id)
+        type TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 
-    // 6. Document Chunks (for RAG)
-    await runQuery(`
+    // 6. Document Chunks (RAG embeddings)
+    await client.query(`
       CREATE TABLE IF NOT EXISTS document_chunks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        material_id INTEGER NOT NULL,
-        course_id INTEGER NOT NULL,
+        id SERIAL PRIMARY KEY,
+        material_id INTEGER NOT NULL REFERENCES materials(id),
+        course_id INTEGER NOT NULL REFERENCES courses(id),
         chunk_index INTEGER NOT NULL,
         content TEXT NOT NULL,
-        embedding_json TEXT NOT NULL, -- JSON array of embeddings
-        FOREIGN KEY(material_id) REFERENCES materials(id),
-        FOREIGN KEY(course_id) REFERENCES courses(id)
+        embedding_json TEXT NOT NULL
       )
     `);
 
     // 7. Tests
-    await runQuery(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS tests (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        course_id INTEGER NOT NULL,
+        id SERIAL PRIMARY KEY,
+        course_id INTEGER NOT NULL REFERENCES courses(id),
         title TEXT NOT NULL,
         duration_minutes INTEGER NOT NULL,
         total_marks INTEGER NOT NULL,
         negative_marking_percentage REAL DEFAULT 0,
         attempt_limit INTEGER DEFAULT 1,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(course_id) REFERENCES courses(id)
+        created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 
     // 8. Questions
-    await runQuery(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS questions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        test_id INTEGER NOT NULL,
+        id SERIAL PRIMARY KEY,
+        test_id INTEGER NOT NULL REFERENCES tests(id),
         question_text TEXT NOT NULL,
-        options_json TEXT NOT NULL, -- JSON array of 4 options
-        correct_answer INTEGER NOT NULL, -- index of correct option (0-3)
-        marks INTEGER NOT NULL DEFAULT 4,
-        FOREIGN KEY(test_id) REFERENCES tests(id)
+        options_json TEXT NOT NULL,
+        correct_answer INTEGER NOT NULL,
+        marks INTEGER NOT NULL DEFAULT 4
       )
     `);
 
     // 9. Test Attempts
-    await runQuery(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS test_attempts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        test_id INTEGER NOT NULL,
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        test_id INTEGER NOT NULL REFERENCES tests(id),
         score INTEGER NOT NULL,
         accuracy REAL NOT NULL,
         time_taken_seconds INTEGER NOT NULL,
-        submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id),
-        FOREIGN KEY(test_id) REFERENCES tests(id)
+        submitted_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+
     // 10. Doubts
-    await runQuery(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS doubts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        course_id INTEGER NOT NULL,
-        user_id INTEGER NOT NULL,
+        id SERIAL PRIMARY KEY,
+        course_id INTEGER NOT NULL REFERENCES courses(id),
+        user_id INTEGER NOT NULL REFERENCES users(id),
         title TEXT NOT NULL,
         description TEXT NOT NULL,
         image_path TEXT,
-        is_pinned INTEGER DEFAULT 0,
-        is_locked INTEGER DEFAULT 0,
+        is_pinned BOOLEAN DEFAULT FALSE,
+        is_locked BOOLEAN DEFAULT FALSE,
         helpful_count INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(course_id) REFERENCES courses(id),
-        FOREIGN KEY(user_id) REFERENCES users(id)
+        created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+
     // 11. Doubt Replies
-    await runQuery(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS doubt_replies (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        doubt_id INTEGER NOT NULL,
-        user_id INTEGER NOT NULL,
+        id SERIAL PRIMARY KEY,
+        doubt_id INTEGER NOT NULL REFERENCES doubts(id),
+        user_id INTEGER NOT NULL REFERENCES users(id),
         content TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(doubt_id) REFERENCES doubts(id),
-        FOREIGN KEY(user_id) REFERENCES users(id)
+        created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 
     // 12. Announcements
-    await runQuery(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS announcements (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        type TEXT NOT NULL, -- universal, course
-        course_id INTEGER, -- nullable
+        id SERIAL PRIMARY KEY,
+        type TEXT NOT NULL,
+        course_id INTEGER REFERENCES courses(id),
         title TEXT NOT NULL,
         content TEXT NOT NULL,
-        priority TEXT DEFAULT 'medium', -- low, medium, high
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(course_id) REFERENCES courses(id)
+        priority TEXT DEFAULT 'medium',
+        created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 
-    // 13. Feedback
-    await runQuery(`
+    // 13. Feedbacks
+    await client.query(`
       CREATE TABLE IF NOT EXISTS feedbacks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        course_id INTEGER NOT NULL,
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        course_id INTEGER NOT NULL REFERENCES courses(id),
         rating INTEGER NOT NULL,
-        responses_json TEXT NOT NULL, -- JSON detailed answers
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id),
-        FOREIGN KEY(course_id) REFERENCES courses(id)
+        responses_json TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 
-    // 14. Universal Content / Resources
-    await runQuery(`
+    // 14. Universal Resources
+    await client.query(`
       CREATE TABLE IF NOT EXISTS universal_resources (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         title TEXT NOT NULL,
         content TEXT NOT NULL,
         file_path TEXT,
-        type TEXT NOT NULL, -- notice, strategy, info, tip
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        type TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 
-    // Seed default administrator if not exists
+    // Seed default admin if not exists
     const adminEmail = 'admin@specificlearnz.com';
-    const existingAdmin = await getRow('SELECT * FROM users WHERE email = ?', [adminEmail]);
-    if (!existingAdmin) {
+    const existing = await client.query(
+      'SELECT id FROM users WHERE email = $1',
+      [adminEmail]
+    );
+
+    if (existing.rows.length === 0) {
       const passwordHash = await bcrypt.hash('AdminPassword123', 10);
-      await runQuery(
-        'INSERT INTO users (name, email, mobile, password_hash, role) VALUES (?, ?, ?, ?, ?)',
+      await client.query(
+        'INSERT INTO users (name, email, mobile, password_hash, role) VALUES ($1, $2, $3, $4, $5)',
         ['System Admin', adminEmail, '9999999999', passwordHash, 'admin']
       );
-      console.log('Seeded default admin user:', adminEmail, 'Password: AdminPassword123');
+      console.log('Seeded default admin user:', adminEmail, '/ Password: AdminPassword123');
     }
-    resolve();
-  } catch (err) {
-    reject(err);
+
+    console.log('PostgreSQL schemas verified and initialized.');
+  } finally {
+    client.release();
   }
-});
-});
 };
 
-export default db;
+export default pool;

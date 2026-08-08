@@ -14,7 +14,7 @@ const sendEmail = async (toEmail, subject, htmlContent) => {
     console.log(`\n=================== [MOCK MAIL SEND] ===================`);
     console.log(`To: ${toEmail}`);
     console.log(`Subject: ${subject}`);
-    console.log(`Content:\n${htmlContent.replace(/<[^>]*>/g, '')}`); // Strip HTML for console
+    console.log(`Content:\n${htmlContent.replace(/<[^>]*>/g, '')}`);
     console.log(`========================================================\n`);
     return true;
   }
@@ -33,7 +33,7 @@ const sendEmail = async (toEmail, subject, htmlContent) => {
         htmlContent: htmlContent
       })
     });
-    
+
     if (!response.ok) {
       const errText = await response.text();
       console.error('Brevo API Error:', errText);
@@ -55,9 +55,8 @@ router.post('/register', async (req, res) => {
   }
 
   try {
-    // Check if user already exists
     const existingUser = await getRow(
-      'SELECT id FROM users WHERE email = ? OR mobile = ?',
+      'SELECT id FROM users WHERE email = $1 OR mobile = $2',
       [email, mobile]
     );
 
@@ -65,18 +64,15 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'Email or Mobile number is already registered' });
     }
 
-    // Generate 6 digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 mins
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
-    // Save/Update OTP
-    await runQuery('DELETE FROM otp_verifications WHERE email = ?', [email]);
+    await runQuery('DELETE FROM otp_verifications WHERE email = $1', [email]);
     await runQuery(
-      'INSERT INTO otp_verifications (email, otp, expires_at) VALUES (?, ?, ?)',
+      'INSERT INTO otp_verifications (email, otp, expires_at) VALUES ($1, $2, $3)',
       [email, otp, expiresAt]
     );
 
-    // Send email
     const subject = 'Verify your email for Specific Learnz';
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e4e4e7; border-radius: 8px;">
@@ -93,9 +89,9 @@ router.post('/register', async (req, res) => {
 
     const emailSent = await sendEmail(email, subject, htmlContent);
 
-    res.json({ 
-      message: emailSent ? 'OTP sent to your email' : 'OTP generation succeeded (Mock Mode)', 
-      mockOtpUsed: !BREVO_API_KEY ? '123456' : undefined 
+    res.json({
+      message: emailSent ? 'OTP sent to your email' : 'OTP generation succeeded (Mock Mode)',
+      mockOtpUsed: !BREVO_API_KEY ? '123456' : undefined
     });
   } catch (error) {
     console.error('Registration OTP error:', error);
@@ -112,13 +108,12 @@ router.post('/verify-otp', async (req, res) => {
   }
 
   try {
-    // Check developer mode bypass
     let isValid = false;
     if (!BREVO_API_KEY && otp === '123456') {
       isValid = true;
     } else {
       const record = await getRow(
-        'SELECT * FROM otp_verifications WHERE email = ? AND otp = ?',
+        'SELECT * FROM otp_verifications WHERE email = $1 AND otp = $2',
         [email, otp]
       );
       if (record && new Date(record.expires_at) > new Date()) {
@@ -130,18 +125,16 @@ router.post('/verify-otp', async (req, res) => {
       return res.status(400).json({ message: 'Invalid or expired OTP code' });
     }
 
-    // Hash password & insert user
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await runQuery(
-      'INSERT INTO users (name, email, mobile, password_hash, role) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO users (name, email, mobile, password_hash, role) VALUES ($1, $2, $3, $4, $5) RETURNING id',
       [name, email, mobile, passwordHash, 'student']
     );
 
-    // Delete OTP
-    await runQuery('DELETE FROM otp_verifications WHERE email = ?', [email]);
+    await runQuery('DELETE FROM otp_verifications WHERE email = $1', [email]);
 
-    // Create JWT
-    const userPayload = { id: result.lastID, email, name, role: 'student' };
+    const newUserId = result.rows[0].id;
+    const userPayload = { id: newUserId, email, name, role: 'student' };
     const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '7d' });
 
     res.json({
@@ -165,8 +158,8 @@ router.post('/login', async (req, res) => {
 
   try {
     const user = await getRow(
-      'SELECT * FROM users WHERE email = ? OR mobile = ?',
-      [emailOrMobile, emailOrMobile]
+      'SELECT * FROM users WHERE email = $1 OR mobile = $1',
+      [emailOrMobile]
     );
 
     if (!user) {
@@ -174,8 +167,8 @@ router.post('/login', async (req, res) => {
     }
 
     if (user.status === 'banned') {
-      return res.status(403).json({ 
-        message: `Your account has been banned. Reason: ${user.ban_reason || 'No reason provided.'}` 
+      return res.status(403).json({
+        message: `Your account has been banned. Reason: ${user.ban_reason || 'No reason provided.'}`
       });
     }
 
@@ -187,18 +180,14 @@ router.post('/login', async (req, res) => {
     const userPayload = { id: user.id, email: user.email, name: user.name, role: user.role };
     const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '7d' });
 
-    res.json({
-      message: 'Login successful',
-      token,
-      user: userPayload
-    });
+    res.json({ message: 'Login successful', token, user: userPayload });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Internal server error during login' });
   }
 });
 
-// 4. Forgot Password (Send Reset Token/Code)
+// 4. Forgot Password
 router.post('/forgot-password', async (req, res) => {
   const { email } = req.body;
 
@@ -207,19 +196,17 @@ router.post('/forgot-password', async (req, res) => {
   }
 
   try {
-    const user = await getRow('SELECT id FROM users WHERE email = ?', [email]);
+    const user = await getRow('SELECT id FROM users WHERE email = $1', [email]);
     if (!user) {
       return res.status(404).json({ message: 'No account exists with this email address' });
     }
 
-    // Generate 6 digit reset token (code)
     const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 mins
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
-    // Store in otp_verifications for reset check
-    await runQuery('DELETE FROM otp_verifications WHERE email = ?', [email]);
+    await runQuery('DELETE FROM otp_verifications WHERE email = $1', [email]);
     await runQuery(
-      'INSERT INTO otp_verifications (email, otp, expires_at) VALUES (?, ?, ?)',
+      'INSERT INTO otp_verifications (email, otp, expires_at) VALUES ($1, $2, $3)',
       [email, resetToken, expiresAt]
     );
 
@@ -249,7 +236,7 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
-// 5. Reset Password with Code
+// 5. Reset Password
 router.post('/reset-password', async (req, res) => {
   const { email, code, newPassword } = req.body;
 
@@ -263,7 +250,7 @@ router.post('/reset-password', async (req, res) => {
       isValid = true;
     } else {
       const record = await getRow(
-        'SELECT * FROM otp_verifications WHERE email = ? AND otp = ?',
+        'SELECT * FROM otp_verifications WHERE email = $1 AND otp = $2',
         [email, code]
       );
       if (record && new Date(record.expires_at) > new Date()) {
@@ -275,10 +262,9 @@ router.post('/reset-password', async (req, res) => {
       return res.status(400).json({ message: 'Invalid or expired verification code' });
     }
 
-    // Reset password
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    await runQuery('UPDATE users SET password_hash = ? WHERE email = ?', [passwordHash, email]);
-    await runQuery('DELETE FROM otp_verifications WHERE email = ?', [email]);
+    await runQuery('UPDATE users SET password_hash = $1 WHERE email = $2', [passwordHash, email]);
+    await runQuery('DELETE FROM otp_verifications WHERE email = $1', [email]);
 
     res.json({ message: 'Password reset successfully' });
   } catch (error) {
@@ -290,7 +276,10 @@ router.post('/reset-password', async (req, res) => {
 // 6. Get Current User Session Info
 router.get('/me', authenticateToken, async (req, res) => {
   try {
-    const user = await getRow('SELECT id, name, email, mobile, role, status FROM users WHERE id = ?', [req.user.id]);
+    const user = await getRow(
+      'SELECT id, name, email, mobile, role, status FROM users WHERE id = $1',
+      [req.user.id]
+    );
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }

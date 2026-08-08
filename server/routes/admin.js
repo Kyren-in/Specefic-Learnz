@@ -6,29 +6,29 @@ const router = express.Router();
 
 // ----------------- ANNOUNCEMENTS -----------------
 
-// 1. Get announcements (Universal + Course-specific if enrolled)
+// 1. Get announcements
 router.get('/announcements', authenticateToken, async (req, res) => {
   const { courseId } = req.query;
 
   try {
     let announcements;
     if (req.user.role === 'admin') {
-      // Admin sees everything
       announcements = await getAllRows('SELECT * FROM announcements ORDER BY created_at DESC');
     } else if (courseId) {
-      // Student: check if enrolled in this course first
-      const isEnrolled = await getRow('SELECT id FROM enrollments WHERE user_id = ? AND course_id = ?', [req.user.id, courseId]);
+      const isEnrolled = await getRow(
+        'SELECT id FROM enrollments WHERE user_id = $1 AND course_id = $2',
+        [req.user.id, courseId]
+      );
       if (!isEnrolled) {
         return res.status(403).json({ message: 'Enrollment required for course announcements' });
       }
       announcements = await getAllRows(
-        `SELECT * FROM announcements 
-         WHERE type = 'universal' OR (type = 'course' AND course_id = ?) 
+        `SELECT * FROM announcements
+         WHERE type = 'universal' OR (type = 'course' AND course_id = $1)
          ORDER BY created_at DESC`,
         [courseId]
       );
     } else {
-      // Just universal announcements
       announcements = await getAllRows(
         "SELECT * FROM announcements WHERE type = 'universal' ORDER BY created_at DESC"
       );
@@ -50,8 +50,8 @@ router.post('/announcements', authenticateToken, requireAdmin, async (req, res) 
 
   try {
     await runQuery(
-      `INSERT INTO announcements (type, course_id, title, content, priority) 
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO announcements (type, course_id, title, content, priority)
+       VALUES ($1, $2, $3, $4, $5)`,
       [type, type === 'course' ? courseId : null, title, content, priority || 'medium']
     );
     res.status(201).json({ message: 'Announcement published successfully' });
@@ -65,7 +65,7 @@ router.post('/announcements', authenticateToken, requireAdmin, async (req, res) 
 router.delete('/announcements/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { id } = req.params;
   try {
-    await runQuery('DELETE FROM announcements WHERE id = ?', [id]);
+    await runQuery('DELETE FROM announcements WHERE id = $1', [id]);
     res.json({ message: 'Announcement deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Failed to delete announcement' });
@@ -75,7 +75,7 @@ router.delete('/announcements/:id', authenticateToken, requireAdmin, async (req,
 
 // ----------------- UNIVERSAL RESOURCES -----------------
 
-// 1. Get universal content sharing resources (available to all registered users)
+// 1. Get universal resources (all registered users)
 router.get('/resources', authenticateToken, async (req, res) => {
   try {
     const resources = await getAllRows('SELECT * FROM universal_resources ORDER BY created_at DESC');
@@ -87,7 +87,7 @@ router.get('/resources', authenticateToken, async (req, res) => {
 
 // 2. Admin: Add Universal Resource
 router.post('/resources', authenticateToken, requireAdmin, async (req, res) => {
-  const { title, content, type, filePath } = req.body; // type: notice, strategy, info, tip
+  const { title, content, type, filePath } = req.body;
 
   if (!title || !content || !type) {
     return res.status(400).json({ message: 'Title, content, and type are required' });
@@ -95,7 +95,7 @@ router.post('/resources', authenticateToken, requireAdmin, async (req, res) => {
 
   try {
     await runQuery(
-      'INSERT INTO universal_resources (title, content, file_path, type) VALUES (?, ?, ?, ?)',
+      'INSERT INTO universal_resources (title, content, file_path, type) VALUES ($1, $2, $3, $4)',
       [title, content, filePath || null, type]
     );
     res.status(201).json({ message: 'Resource added successfully' });
@@ -109,7 +109,7 @@ router.post('/resources', authenticateToken, requireAdmin, async (req, res) => {
 router.delete('/resources/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { id } = req.params;
   try {
-    await runQuery('DELETE FROM universal_resources WHERE id = ?', [id]);
+    await runQuery('DELETE FROM universal_resources WHERE id = $1', [id]);
     res.json({ message: 'Resource deleted' });
   } catch (error) {
     res.status(500).json({ message: 'Failed to delete resource' });
@@ -132,8 +132,8 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
     const params = [];
 
     if (search && search.trim().length > 0) {
-      sql += ` WHERE name LIKE ? OR email LIKE ? OR mobile LIKE ?`;
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      sql += ` WHERE name ILIKE $1 OR email ILIKE $1 OR mobile ILIKE $1`;
+      params.push(`%${search}%`);
     }
 
     sql += ` ORDER BY created_at DESC`;
@@ -149,14 +149,14 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
 // 2. Admin: Ban / Unban User
 router.put('/users/:id/status', authenticateToken, requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const { status, banReason } = req.body; // status: active, banned
+  const { status, banReason } = req.body;
 
   if (!status) {
     return res.status(400).json({ message: 'Status parameter is required' });
   }
 
   try {
-    const user = await getRow('SELECT role FROM users WHERE id = ?', [id]);
+    const user = await getRow('SELECT role FROM users WHERE id = $1', [id]);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -166,7 +166,7 @@ router.put('/users/:id/status', authenticateToken, requireAdmin, async (req, res
     }
 
     await runQuery(
-      'UPDATE users SET status = ?, ban_reason = ? WHERE id = ?',
+      'UPDATE users SET status = $1, ban_reason = $2 WHERE id = $3',
       [status, status === 'banned' ? banReason : null, id]
     );
 
@@ -183,31 +183,36 @@ router.put('/users/:id/status', authenticateToken, requireAdmin, async (req, res
 // 1. Submit Feedback (requires enrollment)
 router.post('/course/:courseId/feedback', authenticateToken, async (req, res) => {
   const { courseId } = req.params;
-  const { rating, responses } = req.body; // responses: object containing answers to prompts
+  const { rating, responses } = req.body;
 
   if (rating === undefined || !responses) {
     return res.status(400).json({ message: 'Rating and survey responses are required' });
   }
 
-  // Check enrollment
-  const isEnrolled = await getRow('SELECT id FROM enrollments WHERE user_id = ? AND course_id = ?', [req.user.id, courseId]);
+  const isEnrolled = await getRow(
+    'SELECT id FROM enrollments WHERE user_id = $1 AND course_id = $2',
+    [req.user.id, courseId]
+  );
   if (!isEnrolled && req.user.role !== 'admin') {
     return res.status(403).json({ message: 'Enrollment required to submit feedback' });
   }
 
   try {
-    // Check if feedback already submitted
-    const existing = await getRow('SELECT id FROM feedbacks WHERE user_id = ? AND course_id = ?', [req.user.id, courseId]);
+    const existing = await getRow(
+      'SELECT id FROM feedbacks WHERE user_id = $1 AND course_id = $2',
+      [req.user.id, courseId]
+    );
+
     if (existing) {
       await runQuery(
-        'UPDATE feedbacks SET rating = ?, responses_json = ? WHERE id = ?',
+        'UPDATE feedbacks SET rating = $1, responses_json = $2 WHERE id = $3',
         [rating, JSON.stringify(responses), existing.id]
       );
       return res.json({ message: 'Feedback updated successfully' });
     }
 
     await runQuery(
-      'INSERT INTO feedbacks (user_id, course_id, rating, responses_json) VALUES (?, ?, ?, ?)',
+      'INSERT INTO feedbacks (user_id, course_id, rating, responses_json) VALUES ($1, $2, $3, $4)',
       [req.user.id, courseId, rating, JSON.stringify(responses)]
     );
     res.status(201).json({ message: 'Feedback submitted successfully' });
@@ -226,17 +231,13 @@ router.get('/course/:courseId/feedback', authenticateToken, requireAdmin, async 
       `SELECT f.*, u.name as user_name, u.email as user_email
        FROM feedbacks f
        JOIN users u ON f.user_id = u.id
-       WHERE f.course_id = ? 
+       WHERE f.course_id = $1
        ORDER BY f.created_at DESC`,
       [courseId]
     );
 
     if (feedbackList.length === 0) {
-      return res.json({
-        averageRating: 0,
-        count: 0,
-        feedbacks: []
-      });
+      return res.json({ averageRating: 0, count: 0, feedbacks: [] });
     }
 
     const avgRating = feedbackList.reduce((sum, f) => sum + f.rating, 0) / feedbackList.length;
@@ -244,10 +245,7 @@ router.get('/course/:courseId/feedback', authenticateToken, requireAdmin, async 
     res.json({
       averageRating: parseFloat(avgRating.toFixed(1)),
       count: feedbackList.length,
-      feedbacks: feedbackList.map(f => ({
-        ...f,
-        responses: JSON.parse(f.responses_json)
-      }))
+      feedbacks: feedbackList.map(f => ({ ...f, responses: JSON.parse(f.responses_json) }))
     });
   } catch (error) {
     console.error('Fetch feedback error:', error);
@@ -265,20 +263,19 @@ router.get('/stats', authenticateToken, requireAdmin, async (req, res) => {
     const totalCourses = await getRow("SELECT COUNT(*) as count FROM courses WHERE status != 'archived'");
     const totalEnrollments = await getRow('SELECT COUNT(*) as count FROM enrollments');
     const testsAttempted = await getRow('SELECT COUNT(*) as count FROM test_attempts');
-    
-    // Revenue calculator
+
     const revenueQuery = await getRow(
-      `SELECT SUM(coalesce(c.discount_price, c.price)) as total 
-       FROM enrollments e 
+      `SELECT SUM(COALESCE(c.discount_price, c.price)) as total
+       FROM enrollments e
        JOIN courses c ON e.course_id = c.id`
     );
 
     res.json({
-      totalUsers: totalUsers.count,
-      activeUsers: activeUsers.count,
-      totalCourses: totalCourses.count,
-      totalEnrollments: totalEnrollments.count,
-      testsAttempted: testsAttempted.count,
+      totalUsers: parseInt(totalUsers.count),
+      activeUsers: parseInt(activeUsers.count),
+      totalCourses: parseInt(totalCourses.count),
+      totalEnrollments: parseInt(totalEnrollments.count),
+      testsAttempted: parseInt(testsAttempted.count),
       revenue: revenueQuery.total || 0
     });
   } catch (error) {

@@ -15,11 +15,8 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Multer config for doubt images
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
+  destination: (req, file, cb) => { cb(null, uploadDir); },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, 'doubt-' + uniqueSuffix + path.extname(file.originalname));
@@ -27,7 +24,6 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// Helper: check enrollment or throw 403
 const checkAccess = async (req, res, courseId) => {
   const isEnrolled = await checkCourseEnrollment(req.user.id, courseId, req.user.role);
   if (!isEnrolled) {
@@ -37,7 +33,7 @@ const checkAccess = async (req, res, courseId) => {
   return true;
 };
 
-// 1. Get Course Doubts (with replies count and author info)
+// 1. Get Course Doubts
 router.get('/course/:courseId', authenticateToken, async (req, res) => {
   const { courseId } = req.params;
   const { search } = req.query;
@@ -50,13 +46,13 @@ router.get('/course/:courseId', authenticateToken, async (req, res) => {
              (SELECT COUNT(*) FROM doubt_replies r WHERE r.doubt_id = d.id) as replies_count
       FROM doubts d
       JOIN users u ON d.user_id = u.id
-      WHERE d.course_id = ?
+      WHERE d.course_id = $1
     `;
     const params = [courseId];
 
     if (search && search.trim().length > 0) {
-      sql += ` AND (d.title LIKE ? OR d.description LIKE ?)`;
-      params.push(`%${search}%`, `%${search}%`);
+      sql += ` AND (d.title ILIKE $2 OR d.description ILIKE $2)`;
+      params.push(`%${search}%`);
     }
 
     sql += ` ORDER BY d.is_pinned DESC, d.created_at DESC`;
@@ -69,16 +65,16 @@ router.get('/course/:courseId', authenticateToken, async (req, res) => {
   }
 });
 
-// 2. Get Single Doubt Details with Replies
+// 2. Get Single Doubt with Replies
 router.get('/:doubtId', authenticateToken, async (req, res) => {
   const { doubtId } = req.params;
 
   try {
     const doubt = await getRow(
-      `SELECT d.*, u.name as author_name, u.role as author_role 
-       FROM doubts d 
-       JOIN users u ON d.user_id = u.id 
-       WHERE d.id = ?`,
+      `SELECT d.*, u.name as author_name, u.role as author_role
+       FROM doubts d
+       JOIN users u ON d.user_id = u.id
+       WHERE d.id = $1`,
       [doubtId]
     );
 
@@ -86,15 +82,13 @@ router.get('/:doubtId', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Doubt not found' });
     }
 
-    // Verify course enrollment
     if (!(await checkAccess(req, res, doubt.course_id))) return;
 
-    // Fetch replies
     const replies = await getAllRows(
-      `SELECT r.*, u.name as author_name, u.role as author_role 
-       FROM doubt_replies r 
-       JOIN users u ON r.user_id = u.id 
-       WHERE r.doubt_id = ? 
+      `SELECT r.*, u.name as author_name, u.role as author_role
+       FROM doubt_replies r
+       JOIN users u ON r.user_id = u.id
+       WHERE r.doubt_id = $1
        ORDER BY r.created_at ASC`,
       [doubtId]
     );
@@ -120,13 +114,13 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
     const imagePath = req.file ? req.file.filename : null;
     const result = await runQuery(
       `INSERT INTO doubts (course_id, user_id, title, description, image_path)
-       VALUES (?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
       [courseId, req.user.id, title, description, imagePath]
     );
 
     res.status(201).json({
       message: 'Doubt posted successfully',
-      doubtId: result.lastID
+      doubtId: result.rows[0].id
     });
   } catch (error) {
     console.error('Post doubt error:', error);
@@ -144,7 +138,7 @@ router.post('/:doubtId/reply', authenticateToken, async (req, res) => {
   }
 
   try {
-    const doubt = await getRow('SELECT course_id, is_locked FROM doubts WHERE id = ?', [doubtId]);
+    const doubt = await getRow('SELECT course_id, is_locked FROM doubts WHERE id = $1', [doubtId]);
     if (!doubt) {
       return res.status(404).json({ message: 'Doubt not found' });
     }
@@ -156,7 +150,7 @@ router.post('/:doubtId/reply', authenticateToken, async (req, res) => {
     if (!(await checkAccess(req, res, doubt.course_id))) return;
 
     await runQuery(
-      'INSERT INTO doubt_replies (doubt_id, user_id, content) VALUES (?, ?, ?)',
+      'INSERT INTO doubt_replies (doubt_id, user_id, content) VALUES ($1, $2, $3)',
       [doubtId, req.user.id, content]
     );
 
@@ -167,12 +161,12 @@ router.post('/:doubtId/reply', authenticateToken, async (req, res) => {
   }
 });
 
-// 5. Helpfulness toggle (Upvote helpfulness)
+// 5. Mark Helpful
 router.post('/:doubtId/helpful', authenticateToken, async (req, res) => {
   const { doubtId } = req.params;
 
   try {
-    const doubt = await getRow('SELECT course_id, helpful_count FROM doubts WHERE id = ?', [doubtId]);
+    const doubt = await getRow('SELECT course_id, helpful_count FROM doubts WHERE id = $1', [doubtId]);
     if (!doubt) {
       return res.status(404).json({ message: 'Doubt not found' });
     }
@@ -180,7 +174,7 @@ router.post('/:doubtId/helpful', authenticateToken, async (req, res) => {
     if (!(await checkAccess(req, res, doubt.course_id))) return;
 
     const newCount = (doubt.helpful_count || 0) + 1;
-    await runQuery('UPDATE doubts SET helpful_count = ? WHERE id = ?', [newCount, doubtId]);
+    await runQuery('UPDATE doubts SET helpful_count = $1 WHERE id = $2', [newCount, doubtId]);
 
     res.json({ message: 'Marked as helpful', helpfulCount: newCount });
   } catch (error) {
@@ -189,56 +183,54 @@ router.post('/:doubtId/helpful', authenticateToken, async (req, res) => {
   }
 });
 
-// 6. Admin/Teacher: Pin Doubt
+// 6. Admin: Pin Doubt
 router.put('/:doubtId/pin', authenticateToken, async (req, res) => {
   const { doubtId } = req.params;
-  const { isPinned } = req.body; // boolean
+  const { isPinned } = req.body;
 
   if (req.user.role !== 'admin') {
     return res.status(403).json({ message: 'Requires administrator permissions' });
   }
 
   try {
-    await runQuery('UPDATE doubts SET is_pinned = ? WHERE id = ?', [isPinned ? 1 : 0, doubtId]);
+    await runQuery('UPDATE doubts SET is_pinned = $1 WHERE id = $2', [!!isPinned, doubtId]);
     res.json({ message: isPinned ? 'Doubt pinned' : 'Doubt unpinned' });
   } catch (error) {
     res.status(500).json({ message: 'Failed to update pin status' });
   }
 });
 
-// 7. Admin/Teacher: Lock Doubt
+// 7. Admin: Lock Doubt
 router.put('/:doubtId/lock', authenticateToken, async (req, res) => {
   const { doubtId } = req.params;
-  const { isLocked } = req.body; // boolean
+  const { isLocked } = req.body;
 
   if (req.user.role !== 'admin') {
     return res.status(403).json({ message: 'Requires administrator permissions' });
   }
 
   try {
-    await runQuery('UPDATE doubts SET is_locked = ? WHERE id = ?', [isLocked ? 1 : 0, doubtId]);
+    await runQuery('UPDATE doubts SET is_locked = $1 WHERE id = $2', [!!isLocked, doubtId]);
     res.json({ message: isLocked ? 'Doubt locked' : 'Doubt unlocked' });
   } catch (error) {
     res.status(500).json({ message: 'Failed to update lock status' });
   }
 });
 
-// 8. Admin/Teacher: Delete Doubt
+// 8. Delete Doubt
 router.delete('/:doubtId', authenticateToken, async (req, res) => {
   const { doubtId } = req.params;
 
   try {
-    const doubt = await getRow('SELECT user_id, image_path FROM doubts WHERE id = ?', [doubtId]);
+    const doubt = await getRow('SELECT user_id, image_path FROM doubts WHERE id = $1', [doubtId]);
     if (!doubt) {
       return res.status(404).json({ message: 'Doubt not found' });
     }
 
-    // Allow deleting if it's the author OR admin
     if (req.user.id !== doubt.user_id && req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Unauthorized' });
     }
 
-    // Delete image if exists
     if (doubt.image_path) {
       const imgPath = path.resolve(uploadDir, path.basename(doubt.image_path));
       if (fs.existsSync(imgPath)) {
@@ -246,9 +238,8 @@ router.delete('/:doubtId', authenticateToken, async (req, res) => {
       }
     }
 
-    // Delete replies and doubt
-    await runQuery('DELETE FROM doubt_replies WHERE doubt_id = ?', [doubtId]);
-    await runQuery('DELETE FROM doubts WHERE id = ?', [doubtId]);
+    await runQuery('DELETE FROM doubt_replies WHERE doubt_id = $1', [doubtId]);
+    await runQuery('DELETE FROM doubts WHERE id = $1', [doubtId]);
 
     res.json({ message: 'Doubt deleted successfully' });
   } catch (error) {

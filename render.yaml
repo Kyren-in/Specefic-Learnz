@@ -1,4 +1,4 @@
-# render.yaml — Render.com deployment configuration
+# render.yaml — Render.com deployment configuration for Supabase PostgreSQL
 # Docs: https://render.com/docs/blueprint-spec
 
 services:
@@ -6,7 +6,7 @@ services:
     name: specific-learnz
     runtime: node
     region: singapore  # closest to India
-    plan: free         # upgrade to starter ($7/mo) for persistent disk + no sleep
+    plan: free         # 100% free with Supabase host!
 
     # Build: install all deps and compile React
     buildCommand: npm run build:prod
@@ -14,22 +14,17 @@ services:
     # Start: run Express which serves both API and built React
     startCommand: npm run start:prod
 
-    # Persistent disk for SQLite database and uploaded PDFs
-    # NOTE: Persistent disk requires a paid plan (Starter $7/mo)
-    # On free plan, data resets on each deploy — add a disk when ready
-    # disk:
-    #   name: specific-learnz-data
-    #   mountPath: /var/data
-    #   sizeGB: 1
-
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 10000           # Render assigns this automatically
+        value: 10000
       - key: JWT_SECRET
-        generateValue: true    # Render auto-generates a secure random value
-      # Add these manually in the Render dashboard:
+        generateValue: true    # Render auto-generates a secure random key
+      # Add DATABASE_URL in Render Dashboard from Supabase:
+      # - key: DATABASE_URL
+      #   value: postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+      # Optional API keys:
       # - key: GEMINI_API_KEY
       # - key: BREVO_API_KEY
       # - key: RAZORPAY_KEY_ID

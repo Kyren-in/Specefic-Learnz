@@ -33,10 +33,28 @@ const runTests = async () => {
   // 1. Init Database
   await initDb();
   
-  // Clear any existing test records to keep test idempotent
-  await runQuery("DELETE FROM users WHERE email = 'student@test.com'");
+  // Clear any existing test records in FK order to keep test idempotent
+  const testUser = await getRow("SELECT id FROM users WHERE email = 'student@test.com'");
+  if (testUser) {
+    await runQuery("DELETE FROM test_attempts WHERE user_id = $1", [testUser.id]);
+    await runQuery("DELETE FROM doubt_replies WHERE user_id = $1", [testUser.id]);
+    await runQuery("DELETE FROM doubts WHERE user_id = $1", [testUser.id]);
+    await runQuery("DELETE FROM enrollments WHERE user_id = $1", [testUser.id]);
+    await runQuery("DELETE FROM users WHERE id = $1", [testUser.id]);
+  }
+  const testCourse = await getRow("SELECT id FROM courses WHERE name = 'Test Physics Course'");
+  if (testCourse) {
+    await runQuery("DELETE FROM questions WHERE test_id IN (SELECT id FROM tests WHERE course_id = $1)", [testCourse.id]);
+    await runQuery("DELETE FROM test_attempts WHERE test_id IN (SELECT id FROM tests WHERE course_id = $1)", [testCourse.id]);
+    await runQuery("DELETE FROM tests WHERE course_id = $1", [testCourse.id]);
+    await runQuery("DELETE FROM document_chunks WHERE course_id = $1", [testCourse.id]);
+    await runQuery("DELETE FROM materials WHERE course_id = $1", [testCourse.id]);
+    await runQuery("DELETE FROM doubt_replies WHERE doubt_id IN (SELECT id FROM doubts WHERE course_id = $1)", [testCourse.id]);
+    await runQuery("DELETE FROM doubts WHERE course_id = $1", [testCourse.id]);
+    await runQuery("DELETE FROM enrollments WHERE course_id = $1", [testCourse.id]);
+    await runQuery("DELETE FROM courses WHERE id = $1", [testCourse.id]);
+  }
   await runQuery("DELETE FROM otp_verifications WHERE email = 'student@test.com'");
-  await runQuery("DELETE FROM courses WHERE name = 'Test Physics Course'");
   
   // Start server
   const server = app.listen(TEST_PORT, () => {

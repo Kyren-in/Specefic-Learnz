@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
 import { runQuery, getRow, getAllRows } from '../config/database.js';
 import { authenticateToken, requireAdmin, checkCourseEnrollment } from '../middleware/auth.js';
-import { extractTextAndEmbed } from './RAG.js'; // We will import from RAG route to update embeddings automatically!
+import { extractTextAndEmbed } from './RAG.js';
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -17,23 +17,19 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Multer storage configuration
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
+  destination: (req, file, cb) => { cb(null, uploadDir); },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, uniqueSuffix + path.extname(file.originalname));
   }
 });
-
 const upload = multer({ storage });
 
 // 1. Get Course Materials List (requires enrollment)
 router.get('/course/:courseId', authenticateToken, async (req, res) => {
   const { courseId } = req.params;
-  
+
   const isEnrolled = await checkCourseEnrollment(req.user.id, courseId, req.user.role);
   if (!isEnrolled) {
     return res.status(403).json({ message: 'Access denied. Course enrollment required.' });
@@ -41,7 +37,7 @@ router.get('/course/:courseId', authenticateToken, async (req, res) => {
 
   try {
     const materials = await getAllRows(
-      'SELECT id, course_id, title, type, created_at FROM materials WHERE course_id = ? ORDER BY id ASC',
+      'SELECT id, course_id, title, type, created_at FROM materials WHERE course_id = $1 ORDER BY id ASC',
       [courseId]
     );
     res.json(materials);
@@ -51,12 +47,12 @@ router.get('/course/:courseId', authenticateToken, async (req, res) => {
   }
 });
 
-// 2. Stream Protected Material with Watermarking (requires enrollment)
+// 2. Stream Protected Material with Watermarking
 router.get('/:id/view', authenticateToken, async (req, res) => {
   const { id } = req.params;
 
   try {
-    const material = await getRow('SELECT * FROM materials WHERE id = ?', [id]);
+    const material = await getRow('SELECT * FROM materials WHERE id = $1', [id]);
     if (!material) {
       return res.status(404).json({ message: 'Material not found' });
     }
@@ -71,50 +67,33 @@ router.get('/:id/view', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Physical file not found on server' });
     }
 
-    // Serve non-PDF files normally (e.g. videos or notes)
     if (material.type !== 'pdf') {
       return res.sendFile(filePath);
     }
 
-    // PDF files: Load and watermark dynamically
+    // PDF: Load and watermark dynamically
     const fileBuffer = fs.readFileSync(filePath);
     const pdfDoc = await PDFDocument.load(fileBuffer);
     const helveticaFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const pages = pdfDoc.getPages();
-    
-    // Get course info for watermark
-    const course = await getRow('SELECT name FROM courses WHERE id = ?', [material.course_id]);
-    const courseName = course ? course.name : 'JEE Course';
 
+    const course = await getRow('SELECT name FROM courses WHERE id = $1', [material.course_id]);
+    const courseName = course ? course.name : 'JEE Course';
     const watermarkText = `Licensed to: ${req.user.name} | Email: ${req.user.email} | ID: USR${req.user.id} | Course: ${courseName}`;
 
     pages.forEach((page) => {
       const { width, height } = page.getSize();
-      
-      // Draw watermark twice on page (mid-bottom and mid-top)
       page.drawText(watermarkText, {
-        x: width * 0.08,
-        y: height * 0.35,
-        size: 11,
-        font: helveticaFont,
-        color: rgb(0.7, 0.7, 0.7),
-        opacity: 0.18,
-        rotate: degrees(30)
+        x: width * 0.08, y: height * 0.35, size: 11,
+        font: helveticaFont, color: rgb(0.7, 0.7, 0.7), opacity: 0.18, rotate: degrees(30)
       });
-      
       page.drawText(watermarkText, {
-        x: width * 0.08,
-        y: height * 0.7,
-        size: 11,
-        font: helveticaFont,
-        color: rgb(0.7, 0.7, 0.7),
-        opacity: 0.18,
-        rotate: degrees(30)
+        x: width * 0.08, y: height * 0.7, size: 11,
+        font: helveticaFont, color: rgb(0.7, 0.7, 0.7), opacity: 0.18, rotate: degrees(30)
       });
     });
 
     const watermarkedPdfBytes = await pdfDoc.save();
-    
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename="study-material.pdf"');
     res.send(Buffer.from(watermarkedPdfBytes));
@@ -135,7 +114,7 @@ router.post('/upload', authenticateToken, requireAdmin, upload.single('file'), a
 
   try {
     let filePath = '';
-    
+
     if (type === 'pdf' || type === 'video' || type === 'note') {
       if (!req.file) {
         return res.status(400).json({ message: 'File upload is required for this type' });
@@ -149,16 +128,14 @@ router.post('/upload', authenticateToken, requireAdmin, upload.single('file'), a
     }
 
     const result = await runQuery(
-      'INSERT INTO materials (course_id, title, file_path, type) VALUES (?, ?, ?, ?)',
+      'INSERT INTO materials (course_id, title, file_path, type) VALUES ($1, $2, $3, $4) RETURNING id',
       [courseId, title, filePath, type]
     );
 
-    const newMaterialId = result.lastID;
+    const newMaterialId = result.rows[0].id;
 
-    // Async PDF chunking and embedding generation for AI RAG Search
     if (type === 'pdf') {
       const physicalPath = path.resolve(uploadDir, filePath);
-      // Run indexing in background to avoid blocking the API response
       extractTextAndEmbed(newMaterialId, courseId, physicalPath).catch(err => {
         console.error('RAG Indexing background error:', err);
       });
@@ -179,12 +156,11 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { id } = req.params;
 
   try {
-    const material = await getRow('SELECT * FROM materials WHERE id = ?', [id]);
+    const material = await getRow('SELECT * FROM materials WHERE id = $1', [id]);
     if (!material) {
       return res.status(404).json({ message: 'Material not found' });
     }
 
-    // Delete physically if local file
     if (material.type !== 'link') {
       const filePath = path.resolve(uploadDir, path.basename(material.file_path));
       if (fs.existsSync(filePath)) {
@@ -192,11 +168,8 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
       }
     }
 
-    // Delete chunks associated with it
-    await runQuery('DELETE FROM document_chunks WHERE material_id = ?', [id]);
-    
-    // Delete material DB entry
-    await runQuery('DELETE FROM materials WHERE id = ?', [id]);
+    await runQuery('DELETE FROM document_chunks WHERE material_id = $1', [id]);
+    await runQuery('DELETE FROM materials WHERE id = $1', [id]);
 
     res.json({ message: 'Material deleted successfully' });
   } catch (error) {
