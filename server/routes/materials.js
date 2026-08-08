@@ -182,15 +182,17 @@ router.post('/upload', authenticateToken, requireAdmin, upload.single('file'), a
         const { error: uploadError } = await supabase.storage
           .from(BUCKET_NAME)
           .upload(filePath, fileBuffer, {
-            contentType: req.file.mimetype,
+            contentType: req.file.mimetype || 'application/octet-stream',
             upsert: true
           });
 
         if (uploadError) {
           console.error('Supabase Storage upload error:', uploadError.message);
-        } else {
-          console.log(`Successfully uploaded file "${filePath}" to Supabase Cloud Storage bucket "${BUCKET_NAME}".`);
+          return res.status(500).json({ 
+            message: `Cloud Storage Upload Error: ${uploadError.message}. Make sure SUPABASE_ANON_KEY is set in Render environment.` 
+          });
         }
+        console.log(`Successfully uploaded file "${filePath}" to Supabase Cloud Storage bucket "${BUCKET_NAME}".`);
       }
     } else if (type === 'link') {
       if (!externalUrl) {
