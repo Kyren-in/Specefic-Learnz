@@ -22,6 +22,11 @@ const ProtectedViewer = ({ fileUrl, title }) => {
     };
   }, []);
 
+  const token = localStorage.getItem('token');
+  const authenticatedUrl = token
+    ? `${fileUrl}${fileUrl.includes('?') ? '&' : '?'}token=${token}#toolbar=0&navpanes=0&statusbar=0&messages=0`
+    : `${fileUrl}#toolbar=0&navpanes=0&statusbar=0&messages=0`;
+
   return (
     <div 
       ref={containerRef}
@@ -54,7 +59,7 @@ const ProtectedViewer = ({ fileUrl, title }) => {
 
       {/* Main Document Frame */}
       <iframe
-        src={`${fileUrl}#toolbar=0&navpanes=0&statusbar=0&messages=0`}
+        src={authenticatedUrl}
         title={title}
         width="100%"
         height="100%"

@@ -37,10 +37,14 @@ const CourseDashboard = ({ user }) => {
     setLoading(true);
     setError('');
 
-    // Fetch Course Overview
-    api.get(`/api/courses/${courseId}`)
-      .then(data => {
-        setCourse(data);
+    // Check enrollment status first
+    api.get(`/api/courses/${courseId}/enrolled`)
+      .then((enrollRes) => {
+        if (!enrollRes.enrolled && user?.role !== 'admin') {
+          navigate(`/course/${courseId}/details`, { replace: true });
+          return;
+        }
+        return api.get(`/api/courses/${courseId}`).then(data => setCourse(data));
       })
       .catch(err => {
         setError(err.message || 'Course access restricted');
@@ -48,7 +52,7 @@ const CourseDashboard = ({ user }) => {
       .finally(() => {
         setLoading(false);
       });
-  }, [courseId]);
+  }, [courseId, user]);
 
   if (loading) {
     return (
