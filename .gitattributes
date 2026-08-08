@@ -1,0 +1,11 @@
+# Normalize line endings to LF for all text files
+* text=auto eol=lf
+
+# Force binary for assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.svg text eol=lf
+*.ico binary
+*.pdf binary
