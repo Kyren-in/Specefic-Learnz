@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Navigation from './components/Navigation.jsx';
+import Footer from './components/Footer.jsx';
 import Auth from './pages/Auth.jsx';
 import Home from './pages/Home.jsx';
 import CourseDetails from './pages/CourseDetails.jsx';
@@ -106,6 +107,8 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
+
+        <Footer />
       </div>
     </BrowserRouter>
   );
