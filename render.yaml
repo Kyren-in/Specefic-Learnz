@@ -1,0 +1,36 @@
+# render.yaml — Render.com deployment configuration
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: specific-learnz
+    runtime: node
+    region: singapore  # closest to India
+    plan: free         # upgrade to starter ($7/mo) for persistent disk + no sleep
+
+    # Build: install all deps and compile React
+    buildCommand: npm run build:prod
+
+    # Start: run Express which serves both API and built React
+    startCommand: npm run start:prod
+
+    # Persistent disk for SQLite database and uploaded PDFs
+    # NOTE: Persistent disk requires a paid plan (Starter $7/mo)
+    # On free plan, data resets on each deploy — add a disk when ready
+    # disk:
+    #   name: specific-learnz-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000           # Render assigns this automatically
+      - key: JWT_SECRET
+        generateValue: true    # Render auto-generates a secure random value
+      # Add these manually in the Render dashboard:
+      # - key: GEMINI_API_KEY
+      # - key: BREVO_API_KEY
+      # - key: RAZORPAY_KEY_ID
+      # - key: RAZORPAY_KEY_SECRET

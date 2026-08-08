@@ -6,8 +6,9 @@ import bcrypt from 'bcryptjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Database path
-const dbPath = path.resolve(__dirname, '../database.sqlite');
+// Database path — configurable via DB_PATH env var for persistent disk hosting
+// e.g. on Render with persistent disk: DB_PATH=/var/data/database.sqlite
+const dbPath = process.env.DB_PATH || path.resolve(__dirname, '../database.sqlite');
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Error opening database', err.message);
