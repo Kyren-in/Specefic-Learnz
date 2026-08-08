@@ -15,11 +15,11 @@ const __dirname = path.dirname(__filename);
 
 // Supabase Storage setup
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bmmtfxjmjygfsmluorqs.supabase.co';
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 
 let supabase = null;
-if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+if (SUPABASE_URL && SUPABASE_KEY) {
+  supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 }
 
 const BUCKET_NAME = 'course-materials';
