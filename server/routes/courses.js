@@ -6,16 +6,14 @@ import { authenticateToken, requireAdmin, checkCourseEnrollment } from '../middl
 
 const router = express.Router();
 
-const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
-
-let razorpay = null;
-if (RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET) {
-  razorpay = new Razorpay({
-    key_id: RAZORPAY_KEY_ID,
-    key_secret: RAZORPAY_KEY_SECRET,
-  });
-}
+const getRazorpayInstance = () => {
+  const key_id = process.env.RAZORPAY_KEY_ID;
+  const key_secret = process.env.RAZORPAY_KEY_SECRET;
+  if (key_id && key_secret) {
+    return new Razorpay({ key_id, key_secret });
+  }
+  return null;
+};
 
 // 1. Get all published/marketplace courses
 router.get('/', async (req, res) => {
@@ -189,6 +187,8 @@ router.post('/purchase', authenticateToken, async (req, res) => {
 
     const amount = Math.round((course.discount_price || course.price) * 100);
 
+    const razorpay = getRazorpayInstance();
+
     if (!razorpay) {
       const mockOrderId = `order_mock_${crypto.randomBytes(8).toString('hex')}`;
       return res.json({
@@ -213,7 +213,7 @@ router.post('/purchase', authenticateToken, async (req, res) => {
       orderId: order.id,
       amount: order.amount,
       currency: order.currency,
-      keyId: RAZORPAY_KEY_ID,
+      keyId: process.env.RAZORPAY_KEY_ID,
       courseName: course.name,
       user: { name: req.user.name, email: req.user.email }
     });
@@ -233,13 +233,17 @@ router.post('/verify-payment', authenticateToken, async (req, res) => {
 
   try {
     let isValid = false;
+    const razorpay = getRazorpayInstance();
 
     if (isMock || !razorpay) {
       isValid = true;
     } else {
+      if (!signature) {
+        return res.status(400).json({ message: 'Signature is required for verification' });
+      }
       const text = `${orderId}|${paymentId}`;
       const generatedSignature = crypto
-        .createHmac('sha256', RAZORPAY_KEY_SECRET)
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
         .update(text)
         .digest('hex');
       isValid = generatedSignature === signature;

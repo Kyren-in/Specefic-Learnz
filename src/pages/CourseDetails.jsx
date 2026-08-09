@@ -103,6 +103,9 @@ const CourseDetails = () => {
         };
 
         const rzp = new window.Razorpay(options);
+        rzp.on('payment.failed', function (response) {
+          setError(response.error?.description || 'Payment failed. Please try again.');
+        });
         rzp.open();
         setPaymentLoading(false);
       }
